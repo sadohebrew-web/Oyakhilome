@@ -132,7 +132,8 @@ textarea{min-height:130px;resize:vertical}
 input:focus,select:focus,textarea:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 3px rgba(242,13,22,.25)}
 .err{color:#ff6b70;font-size:.8rem;min-height:1.1em;margin-top:.3rem}
 [aria-invalid=true]{border-color:#ff6b70}
-.msg{border-radius:12px;padding:1rem;font-size:.95rem;display:none}.msg.ok{display:block;background:#0f2a17;border:1px solid #1f6a3a}.msg.bad{display:block;background:#2a0f10;border:1px solid #7a1c20}
+.msg{border-radius:12px;padding:1rem;font-size:.95rem;display:none}.msg.ok{display:block;background:#0f2a17;border:1px solid #1f6a3a;color:#4ade80;font-weight:600}.msg.bad{display:block;background:#2a0f10;border:1px solid #7a1c20;color:#ff6b70;font-weight:600}.msg{overflow-wrap:anywhere}.msg a{color:inherit}
+.btn:disabled{opacity:.7;cursor:not-allowed;transform:none;pointer-events:none}
 .cta{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:1.5rem}
 .wa{background:#1fa855;box-shadow:0 10px 30px -10px rgba(31,168,85,.6)}.wa:hover{background:#25c364}
 footer{border-top:1px solid var(--line);padding:3.5rem 0 2.5rem;color:var(--mut);font-size:.92rem}
@@ -268,24 +269,25 @@ document.querySelectorAll(".rv").forEach(el=>io.observe(el));
 /* form */
 const F=$("#f"),fm=$("#fm");
 const chk=(id,e,ok,m)=>{const el=$("#"+id);$("#"+e).textContent=ok?"":m;el.setAttribute("aria-invalid",!ok);return ok};
+const show=(k,h)=>{fm.className="msg "+k;fm.setAttribute("role",k==="bad"?"alert":"status");fm.setAttribute("aria-live",k==="bad"?"assertive":"polite");fm.innerHTML=h};
 F.addEventListener("submit",ev=>{
- ev.preventDefault();fm.className="msg";
+ ev.preventDefault();if($("#sb").disabled)return;fm.className="msg";
  const n=$("#n").value.trim(),m=$("#m").value.trim(),t=$("#t").value,x=$("#x").value.trim();
  const r=[chk("n","e-n",n.length>1,"Please enter your name."),chk("m","e-m",/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m),"Enter a valid email address."),chk("t","e-t",!!t,"Please choose a project type."),chk("x","e-x",x.length>=10,"Please write at least 10 characters.")];
- if(r.includes(false)){fm.className="msg bad";fm.textContent="Please fix the highlighted fields and try again.";return}
+ if(r.includes(false)){show("bad","Please fix the highlighted fields and try again.");return}
  const text=`Hello Oyakhilome,\nName: ${n}\nEmail: ${m}\nProject: ${t}\n\n${x}`;
  if($("#hp").value)return; /* honeypot: bots only */
  const fb=`<a href="${wa(text)}" target="_blank" rel="noopener" style="text-decoration:underline">send your enquiry on WhatsApp instead</a>`;
- if(!CONFIG.email){fm.className="msg bad";fm.innerHTML="Email delivery isn’t set up yet, so your enquiry was not sent. Please "+fb+".";return}
- const sb=$("#sb");sb.disabled=true;fm.className="msg";fm.textContent="";
+ if(!CONFIG.email){show("bad","Email delivery isn’t set up yet, so your enquiry was not sent. Please "+fb+".");return}
+ const sb=$("#sb"),lbl=sb.innerHTML;sb.disabled=true;sb.setAttribute("aria-busy","true");sb.textContent="Sending...";fm.className="msg";fm.textContent="";
  fetch("https://formsubmit.co/ajax/"+encodeURIComponent(CONFIG.email),{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({name:n,email:m,project_type:t,message:x,_subject:"New website enquiry from "+n,_template:"table",_honey:""})})
  .then(r=>r.json().then(d=>({ok:r.ok,d})))
  .then(({ok,d})=>{
-  if(ok&&(d.success===true||d.success==="true")){F.reset();fm.className="msg ok";fm.textContent="Thank you, "+n+"! Your enquiry has been sent. We’ll reply to the email address you provided."}
-  else{fm.className="msg bad";fm.innerHTML="Your enquiry could not be confirmed as sent. Please try again, or "+fb+"."}
+  if(ok&&(d.success===true||d.success==="true")){F.reset();show("ok","✓ Message sent successfully!")}
+  else{show("bad","Message could not be sent. Please try again, or "+fb+".")}
  })
- .catch(()=>{fm.className="msg bad";fm.innerHTML="We couldn’t reach the email service (check your connection and try again). You can also "+fb+"."})
- .finally(()=>{sb.disabled=false});
+ .catch(()=>{show("bad","Message could not be sent. Please try again, or "+fb+".")})
+ .finally(()=>{sb.disabled=false;sb.removeAttribute("aria-busy");sb.innerHTML=lbl});
 });
 </script>
 </body>
