@@ -134,6 +134,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--red);outline:none;box
 [aria-invalid=true]{border-color:#ff6b70}
 .msg{border-radius:12px;padding:1rem;font-size:.95rem;display:none}.msg.ok{display:block;background:#0f2a17;border:1px solid #1f6a3a;color:#4ade80;font-weight:600}.msg.bad{display:block;background:#2a0f10;border:1px solid #7a1c20;color:#ff6b70;font-weight:600}.msg{overflow-wrap:anywhere}.msg a{color:inherit}
 .btn:disabled{opacity:.7;cursor:not-allowed;transform:none;pointer-events:none}
+.btn.done,.btn.done:disabled{background:#1fa855;box-shadow:0 10px 30px -10px rgba(31,168,85,.6);opacity:1}
+.ta{background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;padding:.15rem .1rem;display:inline;line-height:inherit}
 .cta{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:1.5rem}
 .wa{background:#1fa855;box-shadow:0 10px 30px -10px rgba(31,168,85,.6)}.wa:hover{background:#25c364}
 footer{border-top:1px solid var(--line);padding:3.5rem 0 2.5rem;color:var(--mut);font-size:.92rem}
@@ -269,6 +271,8 @@ document.querySelectorAll(".rv").forEach(el=>io.observe(el));
 /* form */
 const F=$("#f"),fm=$("#fm");
 const chk=(id,e,ok,m)=>{const el=$("#"+id);$("#"+e).textContent=ok?"":m;el.setAttribute("aria-invalid",!ok);return ok};
+const SEND_TIMEOUT_MS=12000;
+fm.addEventListener("click",e=>{if(e.target.closest(".ta"))F.requestSubmit()});
 const show=(k,h)=>{fm.className="msg "+k;fm.setAttribute("role",k==="bad"?"alert":"status");fm.setAttribute("aria-live",k==="bad"?"assertive":"polite");fm.innerHTML=h};
 F.addEventListener("submit",ev=>{
  ev.preventDefault();if($("#sb").disabled)return;fm.className="msg";
@@ -280,14 +284,20 @@ F.addEventListener("submit",ev=>{
  const fb=`<a href="${wa(text)}" target="_blank" rel="noopener" style="text-decoration:underline">send your enquiry on WhatsApp instead</a>`;
  if(!CONFIG.email){show("bad","Email delivery isn’t set up yet, so your enquiry was not sent. Please "+fb+".");return}
  const sb=$("#sb"),lbl=sb.innerHTML;sb.disabled=true;sb.setAttribute("aria-busy","true");sb.textContent="Sending...";fm.className="msg";fm.textContent="";
- fetch("https://formsubmit.co/ajax/"+encodeURIComponent(CONFIG.email),{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({name:n,email:m,project_type:t,message:x,_subject:"New website enquiry from "+n,_template:"table",_honey:""})})
- .then(r=>r.json().then(d=>({ok:r.ok,d})))
+ /* FormData = a "simple" CORS request (no preflight round-trip); 12s timeout so the button can never hang */
+ const fd=new FormData();fd.append("name",n);fd.append("email",m);fd.append("project_type",t);fd.append("message",x);fd.append("_subject","New website enquiry from "+n);fd.append("_template","table");fd.append("_honey","");
+ const ac=new AbortController(),to=setTimeout(()=>ac.abort(),SEND_TIMEOUT_MS),ta=`<button type="button" class="ta">Try again</button>`;let sent=false;
+ fetch("https://formsubmit.co/ajax/"+encodeURIComponent(CONFIG.email),{method:"POST",headers:{Accept:"application/json"},body:fd,signal:ac.signal})
+ .then(r=>r.text().then(tx=>{let d={};try{d=JSON.parse(tx)}catch(e){}return{ok:r.ok,d}}))
  .then(({ok,d})=>{
-  if(ok&&(d.success===true||d.success==="true")){F.reset();show("ok","✓ Message sent successfully!")}
-  else{show("bad","Message could not be sent. Please try again, or "+fb+".")}
+  if(ok&&(d.success===true||d.success==="true")){sent=true;F.reset();sb.classList.add("done");sb.textContent="✓ Message sent!";show("ok","✓ Message sent! We’ll reply to the email address you provided.")}
+  else{show("bad","Message could not be sent. "+ta+" or "+fb+".")}
  })
- .catch(()=>{show("bad","Message could not be sent. Please try again, or "+fb+".")})
- .finally(()=>{sb.disabled=false;sb.removeAttribute("aria-busy");sb.innerHTML=lbl});
+ .catch(err=>{
+  if(err&&err.name==="AbortError"){show("bad","We didn’t receive a confirmation in time, so we can’t tell whether your message was delivered. To avoid sending it twice, it has not been resent. "+ta+" if you’d like to send it again, or "+fb+".")}
+  else{show("bad","Message could not be sent. "+ta+" or "+fb+".")}
+ })
+ .finally(()=>{clearTimeout(to);sb.removeAttribute("aria-busy");if(sent){setTimeout(()=>{sb.classList.remove("done");sb.innerHTML=lbl;sb.disabled=false},4000)}else{sb.innerHTML=lbl;sb.disabled=false}});
 });
 </script>
 </body>
